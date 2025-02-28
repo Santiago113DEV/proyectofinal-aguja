@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aguja de Buffon</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .dark-mode {
+            background-color: #333;
+            color: #fff;
+        }
+        .dark-mode canvas {
+            background-color: #222;
+        }
+        canvas {
+            border: 1px solid #000;
+            background-color: #fff;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .chart-container {
+            width: 800px;
+            margin-top: 20px;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #555;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simulación de la aguja de Buffon</h1>
+    <canvas id="buffonCanvas" width="800" height="400"></canvas>
+    <div class="controls">
+        <label for="needleLength">Longitud de la aguja:</label>
+        <input type="number" id="needleLength" value="80" min="10" max="200">
+        <label for="stripeDistance">Distancia entre rayas:</label>
+        <input type="number" id="stripeDistance" value="100" min="50" max="200">
+        <label for="numNeedles">Número de agujas:</label>
+        <input type="number" id="numNeedles" value="1000" min="100" max="5000"> <!-- Tope de 5000 agujas -->
+        <button onclick="runSimulation()">Lanzar agujas</button>
+        <button onclick="resetSimulation()">Reiniciar</button>
+        <button onclick="toggleDarkMode()">Modo oscuro</button>
+        <button onclick="exportResults()">Exportar resultados</button>
+    </div>
+    <div class="chart-container">
+        <canvas id="piChart"></canvas>
+    </div>
+    <p id="results"></p>
+
+    <!-- Pie de página con tu nombre y descripción -->
+    <div class="footer">
+        Hecho por <strong>Santiago Betancur Monsalve</strong>, estudiante de Matemáticas.<br>
+        Entrega final: Introducción a Matemáticas.
+    </div>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Parámetros del experimento
+        const canvas = document.getElementById("buffonCanvas");
+        const ctx = canvas.getContext("2d");
+        let stripeDistance = 100; // Distancia entre las rayas
+        let needleLength = 80;    // Longitud de la aguja
+        let numNeedles = 1000;   // Número de agujas a lanzar
+        let crosses = 0;          // Contador de cruces
+        let animationId;         // ID de la animación
+
+        // Gráfico de estimación de π
+        const piChartCtx = document.getElementById("piChart").getContext("2d");
+        const piChart = new Chart(piChartCtx, {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [{
+                    label: "Estimación de π",
+                    data: [],
+                    borderColor: "blue",
+                    fill: false,
+                }],
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                    },
+                },
+            },
+        });
+
+        // Dibujar las rayas en el canvas
+        function drawStripes() {
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = 2;
+            for (let y = 0; y < canvas.height; y += stripeDistance) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+        }
+
+        // Lanzar una aguja aleatoria
+        function throwNeedle() {
+            // Posición aleatoria del centro de la aguja
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+
+            // Ángulo aleatorio de la aguja (en radianes)
+            const theta = Math.random() * Math.PI;
+
+            // Calcular las coordenadas de los extremos de la aguja
+            const x1 = x + (needleLength / 2) * Math.cos(theta);
+            const y1 = y + (needleLength / 2) * Math.sin(theta);
+            const x2 = x - (needleLength / 2) * Math.cos(theta);
+            const y2 = y - (needleLength / 2) * Math.sin(theta);
+
+            // Verificar si la aguja cruce una raya
+            const stripeY1 = Math.floor(y1 / stripeDistance) * stripeDistance;
+            const stripeY2 = Math.floor(y2 / stripeDistance) * stripeDistance;
+            const crossesStripe = stripeY1 !== stripeY2;
+
+            // Dibujar la aguja
+            ctx.strokeStyle = crossesStripe ? "red" : "blue";
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+
+            // Actualizar el contador de cruces
+            if (crossesStripe) crosses++;
+        }
+
+        // Ejecutar la simulación
+        function runSimulation() {
+            // Reiniciar el canvas
+            resetSimulation();
+
+            // Obtener valores de los controles
+            needleLength = parseFloat(document.getElementById("needleLength").value);
+            stripeDistance = parseFloat(document.getElementById("stripeDistance").value);
+            numNeedles = parseInt(document.getElementById("numNeedles").value);
+
+            // Validar que la separación entre líneas no sea menor que la longitud de la aguja
+            if (stripeDistance < needleLength) {
+                alert("La separación entre líneas (d) no puede ser menor que la longitud de la aguja (l).");
+                return; // Detener la simulación
+            }
+
+            // Validar que el número de agujas no sea mayor a 5000
+            if (numNeedles > 5000) {
+                alert("El número máximo de agujas es 5000.");
+                return; // Detener la simulación
+            }
+
+            // Lanzar las agujas con animación
+            let i = 0;
+            function animate() {
+                if (i < numNeedles) {
+                    throwNeedle();
+                    i++;
+                    animationId = requestAnimationFrame(animate);
+                } else {
+                    // Calcular la estimación de π
+                    const piEstimate = (2 * needleLength * numNeedles) / (stripeDistance * crosses);
+
+                    // Mostrar los resultados
+                    document.getElementById("results").innerHTML = `
+                        <strong>Resultados:</strong><br>
+                        Agujas lanzadas: ${numNeedles}<br>
+                        Cruces: ${crosses}<br>
+                        Estimación de π: ${piEstimate.toFixed(5)}<br>
+                        Valor real de π: ${Math.PI.toFixed(5)}<br>
+                        Error: ${Math.abs(Math.PI - piEstimate).toFixed(5)}
+                    `;
+
+                    // Actualizar el gráfico
+                    updateChart(piEstimate);
+                }
+            }
+            animate();
+        }
+
+        // Reiniciar la simulación
+        function resetSimulation() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawStripes();
+            crosses = 0;
+            piChart.data.labels = [];
+            piChart.data.datasets[0].data = [];
+            piChart.update();
+            document.getElementById("results").innerHTML = "";
+        }
+
+        // Actualizar el gráfico
+        function updateChart(estimate) {
+            piChart.data.labels.push(piChart.data.labels.length + 1);
+            piChart.data.datasets[0].data.push(estimate);
+            piChart.update();
+        }
+
+        // Exportar resultados
+        function exportResults() {
+            const data = {
+                numNeedles,
+                crosses,
+                piEstimate: (2 * needleLength * numNeedles) / (stripeDistance * crosses),
+                realPi: Math.PI,
+                error: Math.abs(Math.PI - (2 * needleLength * numNeedles) / (stripeDistance * crosses)),
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "buffon_results.json";
+            a.click();
+        }
+
+        // Modo oscuro
+        function toggleDarkMode() {
+            document.body.classList.toggle("dark-mode");
+        }
+
+        // Dibujar las rayas al cargar la página
+        drawStripes();
+    
+    </script>
+</body>
+</html>
